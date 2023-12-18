@@ -1,13 +1,22 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_1st_project/pages/management.dart';
 import 'package:flutter_1st_project/pages/register.dart';
 import 'package:flutter_1st_project/settings/page_setting.dart';
 import 'package:provider/provider.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'pages/main_page.dart';
 import 'pages/shopping_page.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   runApp(const Main());
 }
 
@@ -44,20 +53,15 @@ class _MainAppState extends State<MainApp> {
     super.initState();
   }
 
-  final TextEditingController _textEditingControllerEmail =
-      TextEditingController();
-  final TextEditingController _textEditingControllerPw =
-      TextEditingController();
-
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   @override
   Widget build(BuildContext context) {
     final counter = Provider.of<Counter>(context);
     return Scaffold(
       drawer: Drawer(
-        child: AppDrawer(
-            textEditingControllerEmail: _textEditingControllerEmail,
-            textEditingControllerPw: _textEditingControllerPw),
-      ),
+          child: AppDrawer(
+        scaffoldKey: _scaffoldKey,
+      )),
       appBar: AppBar(
         title: Text('COZA STORE'),
         actions: [
@@ -155,16 +159,132 @@ class FavoriteButton extends StatelessWidget {
   }
 }
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
+  final GlobalKey<ScaffoldState> scaffoldKey;
   const AppDrawer({
     super.key,
-    required TextEditingController textEditingControllerEmail,
-    required TextEditingController textEditingControllerPw,
-  })  : _textEditingControllerEmail = textEditingControllerEmail,
-        _textEditingControllerPw = textEditingControllerPw;
+    required this.scaffoldKey,
+  });
 
-  final TextEditingController _textEditingControllerEmail;
-  final TextEditingController _textEditingControllerPw;
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final TextEditingController _textEditingControllerEmail =
+      TextEditingController();
+  final TextEditingController _textEditingControllerPw =
+      TextEditingController();
+  late bool logined;
+  String? displayName;
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    if (_auth.currentUser != null) {
+      print("동작");
+      _logined();
+      logined = true;
+    } else {
+      logined = false;
+    }
+  }
+
+  Future<void> _logined() async {
+    User? user = _auth.currentUser;
+    print('$user');
+
+    if (user != null) {
+      try {
+        // Firestore에서 사용자의 문서 가져오기
+        DocumentSnapshot userDoc =
+            await _firestore.collection('users').doc(user.uid).get();
+        print(userDoc.toString());
+        if (userDoc.exists) {
+          print("이름 : ${userDoc['name']}");
+          setState(() {
+            displayName = userDoc['name'];
+          });
+          logined = true;
+        } else {
+          setState(() {
+            displayName = '이름 없음';
+            print("이름 : $displayName");
+          });
+        }
+      } catch (e) {
+        print('Firestore에서 사용자 이름 가져오기 오류: $e');
+      }
+    } else {
+      logined = false;
+    }
+  }
+
+  void _logout() async {
+    await _auth.signOut();
+    // 로그아웃 후 이동할 화면 설정 또는 다른 로직 추가 가능
+    // 예: 로그인 화면으로 이동
+    _auth.signOut();
+    setState(() {
+      logined = false;
+    });
+  }
+
+  Future<void> _login() async {
+    try {
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: _textEditingControllerEmail.text,
+        password: _textEditingControllerPw.text,
+      );
+      // 로그인 성공 시, 추가 작업 수행
+      // 예: 다음 화면으로 이동, 사용자 정보 표시 등
+      print('로그인 성공: ${userCredential.user!.uid}');
+
+      User? user = _auth.currentUser;
+
+      if (user != null) {
+        try {
+          // Firestore에서 사용자의 문서 가져오기
+          DocumentSnapshot userDoc =
+              await _firestore.collection('users').doc(user.uid).get();
+
+          if (userDoc.exists) {
+            print("이름 : ${userDoc['name']}");
+            setState(() {
+              displayName = userDoc['name'];
+            });
+          } else {
+            setState(() {
+              displayName = '이름없음';
+              print("이름 : $displayName");
+            });
+          }
+        } catch (e) {
+          print('Firestore에서 사용자 이름 가져오기 오류: $e');
+        }
+      } else {
+        setState(() {
+          displayName = null;
+        });
+      }
+
+      setState(() {
+        logined = true;
+      });
+    } catch (e) {
+      print('로그인 실패: $e');
+      // 로그인 실패 시, 사용자에게 알림을 표시하거나 다른 조치를 취할 수 있음
+    }
+  }
+
+  @override
+  void dispose() {
+    // TODO: implement dispose
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -201,67 +321,91 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                  color: Colors.grey[400],
-                  borderRadius: BorderRadius.circular(20)),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _textEditingControllerEmail,
-                    decoration: InputDecoration(
-                        helperText: "이메일",
-                        helperStyle: TextStyle(color: Colors.white)),
-                  ),
-                  TextField(
-                    controller: _textEditingControllerPw,
-                    decoration: InputDecoration(
-                        helperText: "비밀번호",
-                        helperStyle: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // 다른 로그인 옵션들을 추가할 수 있습니다.
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: ElevatedButton(
-                style: ButtonStyle(
-                    backgroundColor: MaterialStatePropertyAll(Colors.blue)),
-                onPressed: () {},
-                child: Text(
-                  "로그인",
-                  style: TextStyle(color: Colors.white),
-                )),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
-            child: Row(
-              children: [
-                Text(
-                  "Don't have an account?",
-                  style: TextStyle(fontSize: 16),
-                ),
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    showCalendarsModalBottom(context);
-                  },
-                  child: Text(
-                    'Sign up!',
-                    style: TextStyle(
-                        color: Colors.blue[300],
-                        fontWeight: FontWeight.w500,
-                        fontSize: 17),
-                  ),
+          !logined
+              ? Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        padding: EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                            color: Colors.grey[400],
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Column(
+                          children: [
+                            TextField(
+                              controller: _textEditingControllerEmail,
+                              decoration: InputDecoration(
+                                  helperText: "이메일",
+                                  helperStyle: TextStyle(color: Colors.white)),
+                            ),
+                            TextField(
+                              controller: _textEditingControllerPw,
+                              decoration: InputDecoration(
+                                  helperText: "비밀번호",
+                                  helperStyle: TextStyle(color: Colors.white)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // 다른 로그인 옵션들을 추가할 수 있습니다.
+                    Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: ElevatedButton(
+                          style: ButtonStyle(
+                              backgroundColor:
+                                  MaterialStatePropertyAll(Colors.blue)),
+                          onPressed: _login,
+                          child: Text(
+                            "로그인",
+                            style: TextStyle(color: Colors.white),
+                          )),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
+                      child: Row(
+                        children: [
+                          Text(
+                            "Don't have an account?",
+                            style: TextStyle(fontSize: 16),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) => Register()));
+                            },
+                            child: Text(
+                              'Sign up!',
+                              style: TextStyle(
+                                  color: Colors.blue[300],
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 17),
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                  ],
                 )
-              ],
-            ),
-          ),
+              : Column(
+                  children: [
+                    Text(
+                      '사용자 이름: ${displayName ?? "이름 없음"}',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                    ElevatedButton(
+                        onPressed: () {
+                          _auth.signOut();
+                          setState(() {
+                            logined = false;
+                          });
+                        },
+                        child: Text("로그아웃"))
+                  ],
+                ),
           ListTile(
               title: Text(
             "Notice",
@@ -288,7 +432,6 @@ class AppDrawer extends StatelessWidget {
                   ));
             },
           ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 70, 8, 0),
             child: Container(
@@ -299,161 +442,6 @@ class AppDrawer extends StatelessWidget {
             ),
           )
         ],
-      ),
-    );
-  }
-
-  Future<Null> showCalendarsModalBottom(context) {
-    return showModalBottomSheet(
-      context: context,
-      builder: (context) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.6,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Text(
-                  '회원가입',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ),
-              SizedBox(
-                height: 10,
-              ),
-              TextFormField(
-                decoration: InputDecoration(
-                  labelText: '이메일',
-                  icon: Icon(Icons.email),
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: '비밀번호',
-                  icon: Icon(Icons.lock),
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: '비밀번호확인',
-                  icon: Icon(Icons.lock_open_outlined),
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: '이름',
-                  icon: Icon(Icons.text_fields_sharp),
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  icon: Icon(Icons.person),
-                  labelText: '성별',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: '주소',
-                  icon: Icon(Icons.house_rounded),
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: '휴대폰번호',
-                  icon: Icon(Icons.phone_android_rounded),
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: '생년월일',
-                  icon: Icon(Icons.calendar_month),
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(
-                      vertical: 10, horizontal: 10), // 내용과 테두리 간의 간격 조절
-                  isDense: true,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(10, 14, 10, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    ElevatedButton(
-                        style: ButtonStyle(
-                            backgroundColor:
-                                MaterialStatePropertyAll(Colors.black87)),
-                        onPressed: () {},
-                        child: Text(
-                          "회원가입",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        )),
-                    ElevatedButton(
-                      style: ButtonStyle(
-                          backgroundColor:
-                              MaterialStatePropertyAll(Colors.black87)),
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      child: Text(
-                        "돌아가기",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            ],
-          ),
-        ),
       ),
     );
   }

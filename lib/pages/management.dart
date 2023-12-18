@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_1st_project/pages/product_management.dart';
+import 'package:flutter_1st_project/pages/user_management.dart';
 
-class Management extends StatelessWidget {
+class Management extends StatefulWidget {
   const Management({super.key});
 
+  @override
+  State<Management> createState() => _ManagementState();
+}
+
+class _ManagementState extends State<Management> {
+  int selectedIndex = 0;
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -19,83 +27,52 @@ class Management extends StatelessWidget {
           )
         ],
       ),
-      body: CustomScrollView(
-        slivers: <Widget>[
-          SliverAppBar(
-            automaticallyImplyLeading: false,
-            expandedHeight: 100.0,
-            flexibleSpace: FlexibleSpaceBar(
-              centerTitle: true,
-              collapseMode: CollapseMode.pin,
-              // 버튼 추가
-              background: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  TextButton(onPressed: () {}, child: Text("유저관리")),
-                  TextButton(onPressed: () {}, child: Text("상품관리")),
-                  TextButton(onPressed: () {}, child: Text("오더관리")),
-                  TextButton(onPressed: () {}, child: Text("배송관리")),
-                  TextButton(onPressed: () {}, child: Text("결제관리")),
-                ],
-              ),
-            ),
+      body: page[selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed, // 아이콘 4개 이상일 때 사용
+        currentIndex: selectedIndex,
+        onTap: (index) {
+          setState(() {
+            selectedIndex = index;
+          });
+        },
+        items: [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_circle_rounded),
+            label: '유저관리',
           ),
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (BuildContext context, int index) {
-                return ListTile(
-                  onTap: () => showDialog(
-                    context: context,
-                    builder: (BuildContext context) {
-                      return AlertDialog(
-                        title: Text('회원가입'),
-                        content: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              TextFormField(
-                                decoration: InputDecoration(labelText: '이메일'),
-                              ),
-                              TextFormField(
-                                decoration: InputDecoration(labelText: '비밀번호'),
-                                obscureText: true,
-                              ),
-                            ],
-                          ),
-                        ),
-                        actions: <Widget>[
-                          TextButton(
-                            onPressed: () {
-                              // 다이얼로그를 닫습니다.
-                              Navigator.of(context).pop();
-                            },
-                            child: Text('$index'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              // 다이얼로그를 닫습니다.
-                              Navigator.of(context).pop();
-                            },
-                            child: Text('수정'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () {
-                              // TODO: 회원가입 처리 로직을 추가하세요.
-                              Navigator.of(context).pop(); // 다이얼로그를 닫습니다.
-                            },
-                            child: Text('종료'),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  title: Text('Item $index'),
-                );
-              },
-              childCount: 50,
-            ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.production_quantity_limits_rounded),
+            label: '상품관리',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.offline_pin_sharp),
+            label: '오더관리',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.local_shipping),
+            label: '배송관리',
           ),
         ],
       ),
     );
   }
+
+  final List<Widget> page = [
+    // 각 페이지의 내용을 원하는 위젯으로 변경하세요
+    UserManagement(),
+    ProductManagement(),
+    Container(
+      color: Colors.orange,
+      child: Center(
+        child: Text('오더관리'),
+      ),
+    ),
+    Container(
+      color: Colors.red,
+      child: Center(
+        child: Text('배송관리'),
+      ),
+    ),
+  ];
 }
